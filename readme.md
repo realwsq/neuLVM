@@ -1,4 +1,5 @@
-## Environment: 
+##Environment: 
+
 ```
 conda create -n neuLVM python=3.8
 conda activate neuLVM
@@ -6,11 +7,11 @@ conda install pip
 pip install -r requirements.txt
 ```
 
-## To train neuLVM:
+##To train neuLVM:
 	example commands in `3pop_BILM.sh`  
 
 
-#### Main file for training:
+####Main file for training:
 	`train_meso.py`
 
 ####src files include:
@@ -19,7 +20,7 @@ pip install -r requirements.txt
 	`fast_np.py 		# meso model of multi pops implemented with np (FAST; for the M step optimization)`
 	`helper.py`		
 
-## Secondary files:
+##Secondary files:
 To simulate trials with trained parameters:
 	`simulate.py + activity.py 	# with load_from_trained_model = True and specify the correct file to load`
 or To generate training datasets with ground truth parameters:  
