@@ -170,6 +170,27 @@ def concate_Z(Z, A):
 
 	return Z
 
+def get_best_trained_files(root, multi_train_folders, ):
+	best_loss = 1e9
+	best_trainedfolder = best_Mfile = best_Efile = None
+	for hist in multi_train_folders:
+
+		folder = os.path.join(root, hist)
+		_pb = glob.glob(os.path.join(folder, 'minimizor_result_[0-9]'))
+		# _pb = glob.glob(os.path.join(_SAVE_DIR, 'minimizor_result_[0-9]'))
+		_pb = [int(_f.split('_')[-1]) for _f in _pb]
+		best = np.max(_pb)
+		trained_Mfile = os.path.join(folder, f'minimizor_result_{best}')
+		trained_Efile = os.path.join(folder, f'E{best}_est_param')
+		est_model = pickle.load(open(trained_Mfile, 'rb') )
+		print(folder, best, est_model['log_loss'][-1])
+		if est_model['log_loss'][-1] < best_loss:
+			best_Mfile = trained_Mfile
+			best_Efile = trained_Efile
+			best_trainedfolder = folder
+			best_loss = est_model['log_loss'][-1]
+	return best_Mfile, best_Efile, best_trainedfolder
+
 '''
 plot
 '''

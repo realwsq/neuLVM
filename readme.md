@@ -24,9 +24,9 @@ helper.py
 ## Secondary files:
 To simulate trials with trained parameters:
 
-`simulate.py + activity.py 	# with load_from_trained_model = True and specify the correct file to load`
+`simulate_with_trainedparams.py + activity.py 	# specify the correct file to load`
 
 or To generate training datasets with ground truth parameters:  
 
-`simulate.py + activity.py 	# with load_from_trained_model = False and specify the correct parameters`
+`simulate_with_gtparams.py + activity.py 		# specify the correct parameters`
 
