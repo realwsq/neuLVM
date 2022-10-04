@@ -176,9 +176,9 @@ def get_best_trained_files(root, multi_train_folders, ):
 	for hist in multi_train_folders:
 
 		folder = os.path.join(root, hist)
-		_pb = glob.glob(os.path.join(folder, 'minimizor_result_[0-9]'))
+		_pb = glob.glob(os.path.join(folder, 'E[0-9]_est_param'))
 		# _pb = glob.glob(os.path.join(_SAVE_DIR, 'minimizor_result_[0-9]'))
-		_pb = [int(_f.split('_')[-1]) for _f in _pb]
+		_pb = [int(_f.split('_')[-3][-1]) for _f in _pb]
 		best = np.max(_pb)
 		trained_Mfile = os.path.join(folder, f'minimizor_result_{best}')
 		trained_Efile = os.path.join(folder, f'E{best}_est_param')
@@ -321,7 +321,7 @@ def preprocess_gt_activity(N, J, dt, random_sample_neuron=False):
 		if opt['with_input']==0:
 			# info about the artificial dataset:
 			# T=200s, dt=0.2ms,  
-			with open('./dataset/3pop_noinput', 'rb') as f:
+			with open('./dataset/3pop_noinput2', 'rb') as f:
 				data = pickle.load(f)
 		# with random inputs 
 		elif opt['with_input']==1:

@@ -7,8 +7,7 @@ from helper import get_best_trained_files
 import pdb, glob
 import pickle, os
 
-for end_timepoint in [195]:
-# for end_timepoint in [65,85,100,135,140,150, 175, 195, 200]:
+for end_timepoint in [65]:
     '''
         select the trained file with the lowest loss
     '''
