@@ -10,9 +10,9 @@ from matplotlib import gridspec
 import matplotlib
 
 import tensorflow as tf
-from LIFmesoCell import LIFmesoCell
-from population import population_nomemory_lif
-from helper import moving_average
+from src.LIFmesoCell import LIFmesoCell
+from src.LIFmicroPop import LIFmicroPop
+from src.helper import moving_average
 import pdb
 
 try:
@@ -120,7 +120,7 @@ def simulate_and_plot_activity(
 
             # LIF neuron
             ts_P, A_t_pop, sampled_spikes, sampled_spikeprobs = \
-                        population_nomemory_lif(**model_params, I_ext_vec=I_ext_vec)
+                        LIFmicroPop(**model_params, I_ext_vec=I_ext_vec)
             # ts_P: (T), 
             # A_t_pop: (T, M)
             # sampled_spikes, sampled_spikeprobs: (M, T, N)

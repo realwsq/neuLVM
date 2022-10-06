@@ -16,9 +16,9 @@ Example commands in `3pop_BILM.sh`.
 #### Source files include:
 ```
 arg_parser.py # args for trainin
-LIFmesoCell.py # meso model of multi pops implemented with tf (for the E step optimization)
-fast_np.py # meso model of multi pops implemented with np (FAST; for the M step optimization)
-helper.py		
+src/LIFmesoCell.py # meso model of multi pops implemented with tf (for the E step optimization)
+src/fast_np.py # meso model of multi pops implemented with np (FAST; for the M step optimization)
+src/helper.py		
 ```
 
 ## Secondary files:

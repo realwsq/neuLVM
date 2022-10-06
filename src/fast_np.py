@@ -1,5 +1,5 @@
 import numpy as np
-from LIFmesoCell import LIFmesoCell
+from src.LIFmesoCell import LIFmesoCell
 import pdb, time
 from scipy.stats import norm
 

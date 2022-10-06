@@ -2,8 +2,8 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 
-from activity import simulate_and_plot_activity
-from helper import get_best_trained_files
+from src.activity import simulate_and_plot_activity
+from src.helper import get_best_trained_files
 import pdb, glob
 import pickle, os
 

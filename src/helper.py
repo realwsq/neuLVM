@@ -10,7 +10,7 @@ import pdb
 import matplotlib.pyplot as plt 
 
 from arg_parser import *
-from LIFmesoCell import LIFmesoCell
+from src.LIFmesoCell import LIFmesoCell
 
 
 
@@ -321,7 +321,7 @@ def preprocess_gt_activity(N, J, dt, random_sample_neuron=False):
 		if opt['with_input']==0:
 			# info about the artificial dataset:
 			# T=200s, dt=0.2ms,  
-			with open('./dataset/3pop_noinput2', 'rb') as f:
+			with open('./dataset/3pop_noinput', 'rb') as f:
 				data = pickle.load(f)
 		# with random inputs 
 		elif opt['with_input']==1:

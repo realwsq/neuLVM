@@ -2,8 +2,8 @@ import numpy as np
 import copy
 import matplotlib.pyplot as plt
 
-from activity import simulate_and_plot_activity
-from helper import get_best_trained_files
+from src.activity import simulate_and_plot_activity
+from src.helper import get_best_trained_files
 import pdb, glob
 import pickle, os
 
@@ -12,7 +12,7 @@ for end_timepoint in [65]:
         select the trained file with the lowest loss
     '''
     best_Mfile, best_Efile, SAVE_DIR = get_best_trained_files(f'./result/3pop example/data{end_timepoint}', 
-                                                ['train1', 'train2', 'train3', 'train4', 'train5'])
+                                                [f'train{i}' for i in range(1,6)])
     print(SAVE_DIR)
 
     '''

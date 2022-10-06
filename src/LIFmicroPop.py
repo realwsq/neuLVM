@@ -2,10 +2,10 @@ import numpy as np
 import time
 import pdb
 
-from LIFmesoCell import LIFmesoCell
+from src.LIFmesoCell import LIFmesoCell
 
 
-def population_nomemory_lif(
+def LIFmicroPop(
     time_end,
     dt,
     alpha_mem, 

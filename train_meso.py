@@ -13,9 +13,9 @@ import pdb
 import matplotlib.pyplot as plt 
 
 from arg_parser import * # always go first
-from helper import *
-from fast_np import fast_lossM
-from LIFmesoCell import LIFmesoCell
+from src.helper import *
+from src.fast_np import fast_lossM
+from src.LIFmesoCell import LIFmesoCell
 
 
 try:
