@@ -1,13 +1,8 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import entropy
-
-import time
-import copy
+import matplotlib.pyplot as plt 
 import os, pickle, glob
 
-import pdb
-import matplotlib.pyplot as plt 
 
 from arg_parser import *
 from src.LIFmesoCell import LIFmesoCell
@@ -321,7 +316,7 @@ def preprocess_gt_activity(N, J, dt, random_sample_neuron=False):
 		if opt['with_input']==0:
 			# info about the artificial dataset:
 			# T=200s, dt=0.2ms,  
-			with open('./dataset/3pop_noinput', 'rb') as f:
+			with open('./dataset/3pop_noinput_small', 'rb') as f:
 				data = pickle.load(f)
 		# with random inputs 
 		elif opt['with_input']==1:

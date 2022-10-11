@@ -1,11 +1,6 @@
 import tensorflow as tf
-from tensorflow.keras import regularizers
-import tensorflow_probability as tfp
 import numpy as np
-import time
-import matplotlib.pyplot as plt
-
-import pdb, os, pickle
+import pickle
 
 
 
@@ -33,7 +28,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
         self.da = dt
         self.A = A
         self.a_grid = tf.linspace(0., self.A*self.da, A+1)[:-1]
-        # not include a_cutoff; Nr=A #
         self.M = M # number of pops
         self.N = N
         self.B = B
@@ -57,8 +51,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
         # input kernel
         self._asyn = asyn
         self._J = J 
-        # self._J = np.diag(J) @ np.array(conmat)
-        # self._J = np.array([[J[0], 0, J[1]],[0, J[0], J[1]],[-J[2],-J[2],-J[3]]])
         self.conmat = tf.convert_to_tensor(conmat) # (conmat * diag(J))[a, b] from pop a to pop b
         self._eps = eps # shared across M pops
 
@@ -73,8 +65,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
                                                 tf.dtypes.float32)  # (b, M)
         
         self.initialize = initialize
-        self.trainable_parameter_num = 4
-        self.trainable_hidden_state_num = 1
         self.internal_clock = 0
         self._init_step = True
         self.state_size = [
@@ -89,17 +79,11 @@ class LIFmesoCell(tf.keras.layers.Layer):
         super(LIFmesoCell, self).__init__()
 
     def build(self, input_shapes):
-        # make sure to put 'train_parameter' first
-        # then 'train_hidden_state'
-        # because of the gradient update in E M step
-        # if add a more parameter
-        # change accordingly rnn.cell.trainable_parameter_num 
-        #               and rnn.cell.trainable_hidden_state_num
         self.amem = self.add_weight(
             shape=(self.M, 1), 
             initializer = tf.constant_initializer(self._amem), # alpha_mem = 1/tau_mem
             constraint=tf.keras.constraints.NonNeg(),
-            trainable=True, name="amem",
+            trainable=False, name="amem",
         )
         self.asyn = self.add_weight(
             shape=(self.M, 1), 
@@ -110,31 +94,25 @@ class LIFmesoCell(tf.keras.layers.Layer):
         self.J = self.add_weight(
             shape=(self.M,self.M), 
             initializer = tf.constant_initializer(self._J), 
-            trainable=True, name="J",
+            trainable=False, name="J",
         )
         self.rp = self.add_weight(
             shape=(self.M, 1), 
-            initializer = tf.constant_initializer(self._rp), # must be positive
+            initializer = tf.constant_initializer(self._rp), 
             constraint=tf.keras.constraints.NonNeg(),
-            trainable=True, name="rp",
+            trainable=False, name="rp",
         )
         self.ft = self.add_weight(
             shape=(self.M, 1), 
             initializer = tf.constant_initializer(self._ft), 
-            trainable=True, name="ft",
+            trainable=False, name="ft",
         )
         self.eps = self.add_weight(
             shape=(1), 
-            initializer = tf.constant_initializer(self._eps), # must be positive
+            initializer = tf.constant_initializer(self._eps), 
             constraint=tf.keras.constraints.NonNeg(),
             trainable=False, name="eps",
         )
-        # self.lambda_t = self.add_weight(
-        #     shape=(self.B, self.M, 1),
-        #     initializer = tf.constant_initializer(self._lambda_t),
-        #     constraint  = tf.keras.constraints.NonNeg(),
-        #     trainable=False, name='lambda_t',
-        # )
         self.Z_hist_est = self.add_weight(
             shape=(self.B, self.M, self.A+self.T), 
             initializer = tf.constant_initializer(self._Z_hist_est), 
@@ -162,12 +140,9 @@ class LIFmesoCell(tf.keras.layers.Layer):
                 ft = self.ft[m, 0].numpy()
                 am = self.amem[m,0].numpy()
                 h = (rp+(self.init_A0 @ self.J)[:, m]/am).numpy()
-                # h = (rp+(self.init_A0 @ tf.linalg.diag(self.J) @ self.conmat)[0, m]/am).numpy()
                 
                 A0 = self.init_A0[:, m].numpy()
-                # A0, S0s = LIFmesoCell.compute_stationary_A(h, am, ft, inf=self.A*self.dt, dr=0.05*1e-3, ds=0.05*1e-3, refractory_t=self.ref_t)
                 temp_init_S_t[:,m] = np.array([[LIFmesoCell.S0(s, h[b], am, ft, refractory_t=self.ref_t, dr=1e-3) for s in self.a_grid.numpy()] for b in range(self.B)], dtype=np.float32)
-                # temp_init_S_t[:,m] = S0s[:-1:int(self.da/0.00005)]
                 temp_init_V_t[:,m] = [LIFmesoCell.V_lastfire_rbefore(h[b], self.a_grid.numpy(), am, refractory_t=self.ref_t) for b in range(self.B)]
                 temp_init_sampled_neuron_v[:,m] = [LIFmesoCell.V_lastfire_rbefore(h[b], self.init_sampled_neuron_lastfire.numpy()[b,m], am, refractory_t=self.ref_t) for b in range(self.B)]
                 temp[:,m, :self.A] = A0[:,np.newaxis]*self.dt
@@ -177,10 +152,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
             # All-fire initialization
             temp[:,:,:self.A-1] = float(0.)
             temp[:,:,self.A-1] = float(1.)
-
-        elif self.initialize == 'none':
-            pass
-            # TODO
 
         else:
             assert False 
@@ -202,8 +173,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
     def compute_shared_values(self):
         self._exp_term_syn = tf.math.exp(-self.dt*self.asyn) 
-        # Compute seperately
-        # self._exp_term_tau = tf.math.exp(-self.da*self.amem) 
 
     def reset(self):
         self.internal_clock = 0
@@ -218,8 +187,8 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
     @tf.function
     def compute_firing_intensity(self, V):
-        f = self.exp(V-self.ft) # exp(-self.ft) = self.c => self.ft = -log(self.c)
-        f = tf.where(V==0., 1e-8, f)  # # hard reset to 0 for bins in refractoryness
+        f = self.exp(V-self.ft) 
+        f = tf.where(V==0., 1e-8, f)  # hard reset to 0 for bins in refractoryness
         return f
 
     @tf.function
@@ -255,15 +224,10 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
         # # da/tau_m
         V_t_new = V_t_old + self.da * (self.rp - V_t_old) * self.amem + self.da * input_total
-        # 1-exp(-da/tau_m)
-        # _exp_term_tau = tf.math.exp(-self.da*self.amem) 
-        # V_t_new = (1-_exp_term_tau) * self.rp + _exp_term_tau * V_t_old + self.da * input_total   # (M,1) * (M,1) + (M,1) * (b,M,a) + (b,M,1)
         V_t_new = tf.where(age_old < self.ref_t, 0., V_t_new)  # hard reset to Vreset for bins in refractoryness
 
         lambda_telda = self.compute_firing_intensity(V_t_new) # (b,M,a)
-        # Plam = 0.5 * (lambda_telda + lambda_k) * self.dt
         Plam = lambda_telda * self.dt
-        # Plam = 1-tf.math.exp(-Plam) # (b,M,a)
         Plam = tf.where(Plam >= 0.01, 1-tf.math.exp(-Plam), Plam)
 
         return V_t_new, Plam, lambda_telda
@@ -288,16 +252,11 @@ class LIFmesoCell(tf.keras.layers.Layer):
         Zmacro = tf.math.reduce_sum(m_t * Plam_t, axis=2, keepdims=True) # (b,M,1)
 
         mess = 1-tf.math.reduce_sum(m_t, axis=2, keepdims=True)
-        # lambda_t
-        # if self.inference_mode or tf.reduce_sum(self.lambda_t) < 0:
         v_t = (1-S_t_old) * m_t
         lambda_t = tf.math.reduce_sum(v_t * Plam_t, axis=2, keepdims=True)/tf.math.reduce_sum(v_t, axis=2, keepdims=True)
         # NaN: step=1
         lambda_t = tf.where(tf.math.is_nan(lambda_t), 0., lambda_t)
-        # lambda_t = tf.where(tf.math.abs(mess) > 0.1, 1e5, lambda_t)
-        # else:
-        # lambda_t = self.lambda_t
-        lambda_t = lambda_t # * self.lambda_t
+        lambda_t = lambda_t 
 
         Z = Zmacro + lambda_t * mess
         Z = tf.clip_by_value(Z, clip_value_min=0., clip_value_max=1)
@@ -306,13 +265,11 @@ class LIFmesoCell(tf.keras.layers.Layer):
         Z_new_est = Z
         if self.inference_mode:
             # for inference only
-            # Z_new_est =  tf.constant(np.random.binomial(self.N, Z),dtype=tf.dtypes.float32)/self.N
             Z_new_est =  tf.random.normal((self.B, self.M,1), mean=Z, stddev=tf.sqrt(Z/self.N), dtype=tf.dtypes.float32) 
             Z_new_est = tf.where(Z_new_est<0, 0., Z_new_est)
 
         A = Z / self.dt 
 
-        # Z_likelihood = tfp.distributions.Normal(loc=A*self.dt, scale=tf.sqrt(A*self.dt/self.N)).prob(Z_t_new)
         Z_nll_gaussian = self.Gaussian_nll_with_Z(Z, Z_t_new)
 
 
@@ -322,10 +279,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
     def get_y_t_likelihood(self, sampled_neuron_v, sampled_neuron_lastfire, input_total):
         sampled_neuron_v_new, Plam, lambda_telda = self.get_Plam_t(input_total, sampled_neuron_v, sampled_neuron_lastfire)
 
-        # #  batch_dims=1 is equivalent to having an outer loop over the first axis of params and indices
-        # _lambda_teldadt = tf.gather(lambda_telda, sampled_neuron_lastfire, batch_dims=2) * self.dt
-        # _V_t_old = tf.gather(V_t_old, sampled_neuron_lastfire, batch_dims=2)
-        # _Plam = tf.gather(Plam, sampled_neuron_lastfire, batch_dims=2)
         _lambda_teldadt = lambda_telda * self.dt
         lnPy = tf.where(_lambda_teldadt<0.01, 
                         sampled_neuron_v_new-self.ft+tf.math.log(self.dt), 
@@ -335,25 +288,16 @@ class LIFmesoCell(tf.keras.layers.Layer):
         return lnPy, lnP1_y, sampled_neuron_v_new
 
     def call(self, inputs, states):
-        # print(self.internal_clock)
-        # pdb.set_trace()
         x_fixed = inputs[:,:] # same to all pops  (batch_size)
         V_t_old, logS_t_old, sampled_neuron_v, sampled_neuron_lastfire, I_syn = states
 
 
-        # use the ground truth
         if self.internal_clock > self.syn_delay_bins:
             Z_t_last = self.Z_hist_est[:,:,self.internal_clock+self.A-self.syn_delay_bins-1:self.internal_clock+self.A-self.syn_delay_bins] # (batch_size, M, 1)
-            # # da/tau_m
-            # I_syn += self.dt * (-I_syn+Z_t_last/self.dt) * self.asyn
-            # 1-exp(-da/tau_m)
             I_syn = self._exp_term_syn * I_syn + (1-self._exp_term_syn) * Z_t_last/self.dt # (M,1)*(b,M,1) + (M,1)*(b,M,1)
-            # # no synaptic current
-            # I_syn = Z_t_last / self.da
 
         input_total = tf.expand_dims(tf.tensordot(tf.squeeze(I_syn, axis=2), 
                                                 self.J,
-                                                # tf.tensordot(tf.linalg.diag(self.J), self.conmat, axes=[[1],[0]]), 
                                                 axes=[[1],[0]]), 
                                     axis=2) + \
                         tf.expand_dims(x_fixed * self.eps, axis=2) # ((b, M) @ (M, M), 1) + (b,M,1)
@@ -378,7 +322,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
             # (1,M,A)
 
             logS_t_new = tf.concat(
-                        # (tf.zeros((self.B,1)), (logS_t_old+tf.math.log(1-Plam))[:,:-1]),
                         (tf.zeros((self.B,self.M,1)), (logS_t_old-lambda_telda*self.dt)[:,:,:-1]),
                         axis=2) 
         else:
@@ -397,8 +340,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
         '''
         if self.update_sampledneuron:
             lnPy, lnP1_y, sampled_neuron_v = self.get_y_t_likelihood(sampled_neuron_v, sampled_neuron_lastfire, input_total)
-            # Py = tf.gather(Plam, sampled_neuron_lastfire, axis=1, batch_dims=1) #batch_dims=1 is equivalent to having an outer loop over the first axis of params and indices
-            # lnPy = tf.gather(V_t_new, sampled_neuron_lastfire, axis=1, batch_dims=1)-self.ft+tf.math.log(self.dt) #batch_dims=1 is equivalent to having an outer loop over the first axis of params and indices
             if self.inference_mode:
                 # for inference only
                 self.sampled_hist_gt[:,self.internal_clock+self.A,:,:] = \
@@ -420,10 +361,7 @@ class LIFmesoCell(tf.keras.layers.Layer):
                     lnPy, lnP1_y,       # (b, T, M, N)
                     mess, lambda_t,     # (b, T, M, 1)
                     )
-                    # 1-tf.math.reduce_sum(S_txZ_t, axis=1, keepdims=True),
-                    # h_t_old, m_t_old, S_t_old)
         
-        # new_states = (h_t_new_single, m_t_new, S_t_new)
         new_states = (V_t_new, logS_t_new, sampled_neuron_v, sampled_neuron_lastfire, I_syn)
 
 
@@ -694,6 +632,3 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
         return kwargs   
 
-# remove Delta
-# c-> firing_thres
-# remove J, lambda base for input kernel

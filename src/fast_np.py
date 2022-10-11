@@ -1,7 +1,5 @@
 import numpy as np
 from src.LIFmesoCell import LIFmesoCell
-import pdb, time
-from scipy.stats import norm
 
 def compute_firing_intensity(vmem, ft):
 	# input nparrays of vmem and ft
@@ -63,9 +61,6 @@ def fast_lossy(x, *args):
 	exp_syn = np.exp(-dt*asyn) # (M,1)
 	rp = np.array(x[M+M*M:M*2+M*M])[:,np.newaxis] # (M,1)
 	ft = np.array(x[M*2+M*M:M*3+M*M])[:,np.newaxis] # (M,1)
-	# J = np.array(x[M:M*2]) # (M) 
-	# conmat = np.array(args[10]) # (M, M)
-	# J_ = np.diag(J) @ conmat # (M, M) effective connectivity matrix
 	J_ = np.reshape(x[M:M+M*M], (M,M))
 	eps = args[10] # float/double
 	ref_bins = args[8]
@@ -90,7 +85,6 @@ def fast_lossy(x, *args):
 	age = np.array([da * np.argmax(S[b,:,:A][:,::-1], axis=1) for b in range(B)]) # (B, M, Nsampled), nparray
 	vmem = np.zeros((B, M, Nsampled))	# (B, M, Nsampled), nparray
 	init_A0 = np.array(args[6])[:, :, np.newaxis] # (B, M,1)
-	# init_A0 = (S[:,:,:A,:].mean((-1,-2))/dt)[:, :, np.newaxis] # (B, M,1)
 	_h = rp+ (J_.T @ init_A0)/amem # (B, M, 1)
 	vmem = LIFmesoCell.V_lastfire_rbefore(_h, age, amem, refractory_t=ref_t)
 	I_syn = init_A0 # (B, M,1), nparray
@@ -100,19 +94,16 @@ def fast_lossy(x, *args):
 	for t in range(A, A+T):
 		if t-A > syn_delay_bins:
 			I_syn = exp_syn * I_syn + (1-exp_syn) * Z[:,:,t-syn_delay_bins-1:t-syn_delay_bins] / dt # (M,1)*(B,M,1) + (M,1)*(B,M,1)
-		# I_syn = exp_syn * I_syn + (1-exp_syn) * Z[:,t-1:t] / dt # (M,1)*(M,1) + (M,1)*(M,1)
 		input_total = J_.T @ I_syn + I_ext[:,:,t-A:t-A+1] * eps #(M, M).T @ (B, M,1) + (B,M,1)
 
 		# update the vmem
 		vmem = vmem + da * (rp - vmem) * amem + da * input_total # (B,M,Nsampled)
-		# vmem = (1-exp_mem) * rp + exp_mem * vmem + da * input_total   # (M,1) * (M,1) + (M,1) * (M,Nsampled) + (M,1)
 		vmem[age < ref_t] = 0.  # hard reset to Vreset for bins in refractoryness
 
 		# compute lambda_telda and Plam
 		lambda_telda = compute_firing_intensity(vmem, ft) # (B, M,Nsampled)
 		Plam = lambda_telda * dt # (B,M,Nsampled)
 		Plam[Plam >= 0.01] = 1-np.exp(-Plam[Plam >= 0.01]) # (B, M,A)
-		# Plam = 1-np.exp(-Plam) # (B,M,Nsampled)
 
 		# compute lnPy, lnP1_y
 		_lambda_teldadt = lambda_telda * dt # (B,M,Nsampled)
@@ -179,9 +170,6 @@ def fast_lossZ(x, *args):
 	exp_syn = np.exp(-dt*asyn) # (M,1)
 	rp = np.array(x[M+M*M:M*2+M*M])[:,np.newaxis] # (M,1)
 	ft = np.array(x[M*2+M*M:M*3+M*M])[:,np.newaxis] # (M,1)
-	# J = np.array(x[M:M*2]) # (M) 
-	# conmat = np.array(args[10]) # (M, M)
-	# J_ = np.diag(J) @ conmat # (M, M) effective connectivity matrix
 	J_ = np.reshape(x[M:M+M*M], (M,M))
 	eps = args[9] # float/double
 	ref_bins = args[7]
@@ -221,19 +209,16 @@ def fast_lossZ(x, *args):
 	for t in range(A, A+T):
 		if t-A > syn_delay_bins:
 			I_syn = exp_syn * I_syn + (1-exp_syn) * Z[:,:,t-syn_delay_bins-1:t-syn_delay_bins] / dt # (M,1)*(B,M,1) + (M,1)*(B,M,1)
-		# I_syn = exp_syn * I_syn + (1-exp_syn) * Z[:,t-1:t] / dt # (M,1)*(M,1) + (M,1)*(M,1)
 		input_total = J_.T @ I_syn + I_ext[:,:,t-A:t-A+1] * eps #(M, M).T @ (B, M,1) + (B,M,1)
 
 		# update the vmem
 		vmem = vmem + da * (rp - vmem) * amem + da * input_total  # (B,M,Nsampled)
-		# vmem = (1-exp_mem) * rp + exp_mem * vmem + da * input_total   # (M,1) * (M,1) + (M,1) * (M,A) + (M,1)
 		vmem[age_repeat < ref_t] = 0.  # hard reset to Vreset for bins in refractoryness
 
 		# compute lambda_telda and Plam
 		lambda_telda = compute_firing_intensity(vmem, ft) # (B,M,A)
 		Plam = lambda_telda * dt # (B,M,A)
 		Plam[Plam >= 0.01] = 1-np.exp(-Plam[Plam >= 0.01]) # (B,M,A)
-		# Plam = 1-np.exp(-Plam) # (B,M,A)
 
 		# estimate Z
 		S = np.exp(logS)   	# (B,M,A)
@@ -246,8 +231,6 @@ def fast_lossZ(x, *args):
 		messes[:, :, t-A] = mess
 		lambda_t = np.sum(v * Plam, -1)/np.sum(v, -1)  # (B,M)
 		lambda_t[np.isnan(lambda_t)] = 1e5
-		# lambda_t[mess > 0.1] = 1e5
-		# lambda_t = reg_mess
 
 
 		Z_pred = Zmacro + lambda_t * mess # (B,M)

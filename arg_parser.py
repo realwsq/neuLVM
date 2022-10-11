@@ -1,7 +1,6 @@
 from optparse import OptionParser
 from optparse import OptionGroup
 import time
-import argparse, os
 
 
 def parse_args():

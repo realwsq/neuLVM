@@ -3,6 +3,7 @@ estpopact_corr.py
 
 result/
 dataset/
+!dataset/3pop_noinput_small
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

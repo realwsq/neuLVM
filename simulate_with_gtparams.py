@@ -1,16 +1,12 @@
 import numpy as np
-import copy
-import matplotlib.pyplot as plt
 
 from src.activity import simulate_and_plot_activity
 from src.helper import get_best_trained_files
-import pdb, glob
-import pickle, os
 
 model_params = dict(
     dt=0.2 * 1e-3,
     dt_meso = 0.004,
-    time_end=200.,
+    time_end=100.,
     N=[400,400,200], 
     SAMPLED_NEURON_NUM=30,
     M=3, 
@@ -44,10 +40,10 @@ input_params = dict(
 plot_params = dict(
     Nsim = 1,
     plot_micro=True,
-    save_micro=True,
-    plot_meso_lif =False,
-    sim_lif = True,
-    save_sim_lif = False, 
+    save_sim_micro=False,
+    plot_meso =False,
+    sim_meso = True,
+    save_sim_meso = False, 
     w=80,
 
     savepath=SAVE_DIR,

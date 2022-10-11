@@ -1,15 +1,9 @@
 
 import tensorflow as tf 
-from tensorflow.keras import backend as K
 from scipy.optimize import minimize
 import numpy as np
-import itertools
-import warnings
 
-import time
-import copy
-import os, pickle, glob
-import pdb
+import time, os, pickle, pdb
 import matplotlib.pyplot as plt 
 
 from arg_parser import * # always go first
@@ -75,7 +69,7 @@ def train_pass_Estep(rnn, I_ext, **kwargs):
 			plot_hidden_activity(concate_spiketrain(sampled_hist_gt, A)[0], 
 				True, concate_Iext(I_ext)[0],
 				False, None,
-				os.path.join(SAVE_DIR, f"E_{bigepoch}_{epoch}_{kwargs['id_']}.png"), 
+				os.path.join(SAVE_DIR, f"E_{bigepoch}_{epoch}.png"), 
 				label=['ground_truth', 'estimated'],
 				data=[np.expand_dims(concate_Z(kwargs['A_gt'], A).T, 0),  # (1, T, M)
 					np.expand_dims(concate_Z(Z_hist_est, A).T/opt['dt'], 0), # (1, T, M)
@@ -96,7 +90,7 @@ def train_pass_Estep(rnn, I_ext, **kwargs):
 		axes[2][0].set_xlabel('#epoch')
 		axes[2][1].set_xlabel('#epoch in bigepoch')
 		plt.tight_layout()
-		plt.savefig(os.path.join(SAVE_DIR, f"Eloss_{kwargs['id_']}.png"))
+		plt.savefig(os.path.join(SAVE_DIR, f"Eloss.png"))
 		plt.close()
 
 	if kwargs['timing']:
@@ -109,8 +103,8 @@ def train_pass_Estep(rnn, I_ext, **kwargs):
 	grads = tape.gradient(loss_value, rnn.cell.trainable_variables)
 	grads = [tf.where(tf.math.is_nan(grad), tf.zeros_like(grad), grad) for grad in grads]
 
-	optimizerE.apply_gradients(zip(grads[rnn.cell.trainable_parameter_num:rnn.cell.trainable_parameter_num+rnn.cell.trainable_hidden_state_num], 
-				rnn.cell.trainable_variables[rnn.cell.trainable_parameter_num:rnn.cell.trainable_parameter_num+rnn.cell.trainable_hidden_state_num]))
+	optimizerE.apply_gradients(zip(grads, 
+				rnn.cell.trainable_variables))
 	if kwargs['timing']:
 		print("--- backward %s seconds ---" % (time.time() - start_time))
 
@@ -284,8 +278,7 @@ def train_pass(rnn, I_ext, **kwargs):
 
 
 
-def train(epochs, suffix):
-	id_ = f"{int(opt['J'][0])}_{suffix}"
+def train(epochs):
 
 	'''
 		read data
@@ -307,7 +300,7 @@ def train(epochs, suffix):
 	plot_hidden_activity(concate_spiketrain(sampled_hist_gt, A)[0], 
 		False, None,
 		False, None,
-		os.path.join(SAVE_DIR, f"init_{id_}.png"), 
+		os.path.join(SAVE_DIR, f"init.png"), 
 		label=['ground_truth', 'estimated'],
 		data=[np.expand_dims(concate_Z(A_gt, A).T, 0),  # (1, T, M)
 			np.expand_dims(concate_Z(Z_hist_est_init, A).T/opt['dt'], 0), # (1, T, M)
@@ -324,12 +317,12 @@ def train(epochs, suffix):
 	opt['init_ft'] = [np.random.uniform(_ft*opt['alpha'], _ft*opt['beta']) for _ft in opt['ft']]
 
 	rnn = init_model(sampled_hist_gt, A_gt*opt['dt'])
-	rnn.cell.save_model(os.path.join(SAVE_DIR, f'init_param_{id_}'))
+	rnn.cell.save_model(os.path.join(SAVE_DIR, f'init_param'))
 
 	overall_time = time.time()
 	for e in range(epochs):
 		rnn, improved = train_pass(rnn, I_ext,
-					bigepoch=e, timing=True, A_gt=A_gt, id_=id_) 
+					bigepoch=e, timing=True, A_gt=A_gt) 
 
 		if not improved:
 			epochs = e+1
@@ -346,7 +339,6 @@ if __name__ == "__main__":
 		# Create a new directory because it does not exist 
 		os.makedirs(SAVE_DIR)
 
-	suffix = str(time.time())
-	train(opt['max_epochs'], suffix)
+	train(opt['max_epochs'])
 
 

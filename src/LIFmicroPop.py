@@ -1,6 +1,4 @@
 import numpy as np
-import time
-import pdb
 
 from src.LIFmesoCell import LIFmesoCell
 
