@@ -2,7 +2,7 @@ estpopact_corr.py
 3pop_BILM2.sh
 
 result/
-dataset/
+dataset/*
 !dataset/3pop_noinput_small
 
 # Byte-compiled / optimized / DLL files
