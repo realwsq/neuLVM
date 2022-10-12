@@ -11,47 +11,23 @@ from src.LIFmesoCell import LIFmesoCell
 
 def init_model(sampled_hist_gt, Z_hist_gt):
 	'''
-	sampled_hist_gt: (Btotal, M, A+T, Nsampled)
-	Z_hist_gt: (Btotal, M, A+T)
+	sampled_hist_gt: (B, M, A+T, Nsampled)
+	Z_hist_gt: (B, M, A+T)
 	'''
-	if opt['sampled_spike_history_smoothed_w'] > 0:
-		Z_hist_est = moving_average(sampled_hist_gt.mean(-1).reshape((-1, A+T_perB)), 
-										int(opt['sampled_spike_history_smoothed_w']*0.001/opt['dt']), 
-										kernel=opt['sampled_spike_history_smoothed_kernel']
-										).reshape((Btotal, opt['M'], A+T_perB))
-										# (Btotal, M, A+T)
-	elif opt['sampled_spike_history_smoothed_w'] == 0:
-		Z_hist_est = Z_hist_gt
-	else: # < 0
-		Z_hist_est = moving_average(Z_hist_gt.reshape((-1, A+T_perB)), 
-										-int(opt['sampled_spike_history_smoothed_w']*0.001/opt['dt']), 
-										kernel=opt['sampled_spike_history_smoothed_kernel']
-										).reshape((Btotal, opt['M'], A+T_perB))
+	Z_hist_est = moving_average(sampled_hist_gt.mean(-1).reshape((-1, A+T_perB)), 
+									int(opt['sampled_spike_history_smoothed_w']*0.001/opt['dt']), 
+									kernel=opt['sampled_spike_history_smoothed_kernel']
+									).reshape((B, opt['M'], A+T_perB))
+									# (B, M, A+T)
 
-
-	best_rnn = LIFmesoCell.load_model(\
+	rnn = LIFmesoCell.load_model(\
 					opt['init_amem'], opt['init_J'], opt['init_rp'], opt['init_ft'], Z_hist_est, 
-					opt['asyn'], opt['eps'], opt['ref_t'], opt['conmat'], opt['lambda_t'], opt['syn_delay'],
-					opt['dt'], A, opt['M'], opt['N'], opt['Nsampled'], T_perB, Btotal,
+					opt['asyn'], opt['eps'], opt['ref_t'], opt['conmat'], opt['syn_delay'],
+					opt['dt'], A, opt['M'], opt['N'], opt['Nsampled'], T_perB, B,
 					sampled_hist_gt,
 					opt['initialize'],
-					opt['inference_mode'],
-					opt['update_popact'],
-					opt['update_sampledneuron']
+					opt['simulation_mode'],
 					)
-
-	return best_rnn
-
-def load_model_from_file(sampled_hist_gt, file_name):
-
-	rnn = LIFmesoCell.load_model_from_savedfile(os.path.join(SAVE_DIR,file_name), 
-					opt['asyn'], opt['eps'], opt['ref_t'], opt['conmat'], opt['lambda_t'], opt['syn_delay'],
-					opt['dt'], A, opt['M'], opt['N'], opt['Nsampled'], TIME_STEP, BATCH_SIZE,
-					sampled_hist_gt,
-					opt['initialize'],
-					opt['inference_mode'],
-					opt['update_popact'],
-					opt['update_sampledneuron'])
 
 	return rnn
 
@@ -64,12 +40,13 @@ def moving_average(x, w, kernel='ma'):
 		    return np.convolve(x, np.ones(w), 'same') / w 
 		elif kernel == 'gaussian':
 			return gaussian_filter1d(x, w, mode='reflect')
-	if kernel == 'ma_forward':
-	    return np.array([np.convolve(x[i], np.concatenate((np.zeros(w-1),np.ones(w)),axis=None), 'same') / w for i in range(len(x))])
-	if kernel == 'ma':
-	    return np.array([np.convolve(x[i], np.ones(w), 'same') / w for i in range(len(x))])
-	elif kernel == 'gaussian':
-		return np.array([gaussian_filter1d(x[i], w, mode='reflect') for i in range(len(x))])
+	else:
+		if kernel == 'ma_forward':
+		    return np.array([np.convolve(x[i], np.concatenate((np.zeros(w-1),np.ones(w)),axis=None), 'same') / w for i in range(len(x))])
+		if kernel == 'ma':
+		    return np.array([np.convolve(x[i], np.ones(w), 'same') / w for i in range(len(x))])
+		elif kernel == 'gaussian':
+			return np.array([gaussian_filter1d(x[i], w, mode='reflect') for i in range(len(x))])
 
 
 def unfold_variables_withorder(vars):
@@ -87,60 +64,30 @@ def unfold_variables_withorder(vars):
 	return ret
 
 def variablenamed_withorder(M):
-	ret = ['tau_mem'] * M 
-	if opt['J_parameterize'] == 9:
-		ret += ['J'] * (M*M) 
-	elif opt['J_parameterize'] == 3:
-		ret += ['J'] * M 
+	ret = ['amem'] * M 
+	ret += ['J'] * M 
 	ret += ['rp'] * M 
 	ret += ['ft'] * M 
 
 	return ret
 
 def fold_variables_withorder(param_list, M, totype):
-	if opt['J_parameterize'] == 9:
-		if totype == dict:
-			ret = {}
-			ret['amem'] = param_list[:M]
-			ret['J'] = param_list[M:M+M*M]
-			ret['rp'] = param_list[M+M*M:M*2+M*M]
-			ret['ft'] = param_list[M*2+M*M:M*3+M*M]
-		elif totype == list: 
-			ret = [param_list[:M]]
-			ret += param_list[M:M+M*M]
-			ret += param_list[M+M*M:M*2+M*M]
-			ret += param_list[M*2+M*M:M*3+M*M]
-	elif opt['J_parameterize'] == 3:
-		if totype == dict:
-			ret = {}
-			ret['amem'] = param_list[:M]
-			ret['J'] = param_list[M:M*2]
-			ret['rp'] = param_list[M*2:M*3]
-			ret['ft'] = param_list[M*3:M*4]
-		elif totype == list: 
-			ret = [param_list[:M]]
-			ret += [param_list[M:M*2]]
-			ret += [param_list[M*2:M*3]]
-			ret += [param_list[M*3:M*4]]
+	if totype == dict:
+		ret = {}
+		ret['amem'] = param_list[:M]
+		ret['J'] = param_list[M:M*2]
+		ret['rp'] = param_list[M*2:M*3]
+		ret['ft'] = param_list[M*3:M*4]
+	elif totype == list: 
+		ret = [param_list[:M]]
+		ret += [param_list[M:M*2]]
+		ret += [param_list[M*2:M*3]]
+		ret += [param_list[M*3:M*4]]
 		
 	return ret
 
-def get_max_minimizor_result_from_folder(folder_name):
-	# max # of foldername/minimizor_result_#
-	_pb = glob_all_files_endwith_int(os.path.join(folder_name, 'minimizor_result_'))
-	_pb = [int(_f.split('_')[-1]) for _f in _pb]
-	best = np.max(_pb)
-	return best
 
-def glob_all_files_endwith_int(file_name_base, n=2, file_name_end=''):
-	fs = []
-	file_name = file_name_base
-	for i in range(n):
-		file_name = f"{file_name}[0-9]"
-		fs = fs + glob.glob(f"{file_name}{file_name_end}")
-	return fs
-
-def concate_spiketrain(st, A):
+def concatenate_spiketrain(st, A):
 	# st: (B,M,A+T,Nsampled)
 	# return (B*T, M*Nsampled), (M,B*T,Nsampled)
 	B,M,T,Nsampled = st.shape 
@@ -149,7 +96,7 @@ def concate_spiketrain(st, A):
 
 	return np.moveaxis(st, 1, 0).reshape((B*T, M*Nsampled)), st
 
-def concate_Iext(Iext):
+def concatenate_Iext(Iext):
 	# Iext: (B,M,T)
 	# return (M,B*T)
 	B, M, T = Iext.shape
@@ -157,13 +104,14 @@ def concate_Iext(Iext):
 	Iext = np.reshape(Iext, (M, B*T))
 	return Iext
 
-def concate_Z(Z, A):
+def concatenate_Z(Z, A):
 	# Z: (B,M,A+T)
 	B,M,T = Z.shape 
 	T = T-A
 	Z = np.moveaxis(Z[:,:,A:], 0, 1).reshape((M,-1)) # (M, B*T)
 
 	return Z
+
 
 def get_best_trained_files(root, multi_train_folders, ):
 	best_loss = 1e9
@@ -172,24 +120,24 @@ def get_best_trained_files(root, multi_train_folders, ):
 
 		folder = os.path.join(root, hist)
 		_pb = glob.glob(os.path.join(folder, 'E[0-9]_est_param'))
-		# _pb = glob.glob(os.path.join(_SAVE_DIR, 'minimizor_result_[0-9]'))
 		_pb = [int(_f.split('_')[-3][-1]) for _f in _pb]
 		best = np.max(_pb)
 		trained_Mfile = os.path.join(folder, f'minimizor_result_{best}')
 		trained_Efile = os.path.join(folder, f'E{best}_est_param')
 		est_model = pickle.load(open(trained_Mfile, 'rb') )
-		print(folder, best, est_model['log_loss'][-1])
-		if est_model['log_loss'][-1] < best_loss:
+		print(f"Under folder {folder}")
+		print(f"\t the best EMstep is {best}, with loss {est_model['loss_last']}")
+		if est_model['loss_last'] < best_loss:
 			best_Mfile = trained_Mfile
 			best_Efile = trained_Efile
 			best_trainedfolder = folder
-			best_loss = est_model['log_loss'][-1]
+			best_loss = est_model['loss_last']
+	print(f"Model under folder {best_trainedfolder} is the best.")
 	return best_Mfile, best_Efile, best_trainedfolder
 
 '''
 plot
 '''
-
 def plot_sampled_spike_trains(sampled_spikes, savename):
 	# sampled_spikes should be of shape [Nneuron, Tstep]
 	fig, ax=plt.subplots(1,1,sharex=True)  # no likelihood yet
@@ -304,8 +252,22 @@ def _plot_dyn(ax=None, alpha=1, w=1, **kwargs):
 	ax.spines['right'].set_visible(False)
 	ax.spines['top'].set_visible(False)
 
-
-
+def plot_loss(loss_history_E, EMstep_history_E, curEMstep):
+	idx_thisEMstep = np.where(np.array(EMstep_history_E)==curEMstep)[0]
+	fig, axes = plt.subplots(3,2)
+	losses_label = ['loss_y', 'loss_Z', 'loss_all']
+	for l in range(3):
+		ax2 = axes[l][0].twinx()
+		axes[l][0].plot([loss_history_E[e][l+1] for e in range(len(EMstep_history_E))], '-k')
+		ax2.plot(EMstep_history_E, 'r')
+		axes[l][0].set_ylabel(losses_label[l])
+		axes[l][1].set_ylabel('EMstep')
+		axes[l][1].plot([loss_history_E[e][l+1] for e in idx_thisEMstep], '-k')
+	axes[2][0].set_xlabel('# total GDs')
+	axes[2][1].set_xlabel('# GDs in one Eepoch')
+	plt.tight_layout()
+	plt.savefig(os.path.join(SAVE_DIR, f"Eloss.png"))
+	plt.close()
 
 def preprocess_gt_activity(N, J, dt, random_sample_neuron=False): 	
 	_A = int(opt['a_cutoff']/dt)
@@ -370,18 +332,15 @@ def preprocess_gt_activity(N, J, dt, random_sample_neuron=False):
 		Z_hist_gt = None
 
 	# Process4: batch
-	_Btotal = int(opt['trial_length']/opt['t_perbatch'])
-	_T_perB = int(opt['t_perbatch']/dt)
+	A_gt_inbatch = None if (A_gt_raw is None) else np.zeros((B, opt['M'], _A+T_perB), dtype=np.float64)
+	sampled_spikes_raw_inbatch = np.zeros((B, opt['M'], _A+T_perB, opt['Nsampled']), dtype=np.float64)
+	I_ext_vec_inbatch = np.zeros((B, opt['M'], T_perB), dtype=np.float64)
 
-	A_gt_inbatch = None if (A_gt_raw is None) else np.zeros((_Btotal, opt['M'], _A+_T_perB), dtype=np.float64)
-	sampled_spikes_raw_inbatch = np.zeros((_Btotal, opt['M'], _A+_T_perB, opt['Nsampled']), dtype=np.float64)
-	I_ext_vec_inbatch = np.zeros((_Btotal, opt['M'], _T_perB), dtype=np.float64)
-
-	for _b in range(_Btotal):
+	for _b in range(B):
 		if not (A_gt_raw is None):
-			A_gt_inbatch[_b] = A_gt_raw[:,_T_perB*_b:_T_perB*_b+_A+_T_perB]
-		sampled_spikes_raw_inbatch[_b] = sampled_spikes_raw[:,_T_perB*_b:_T_perB*_b+_A+_T_perB]
-		I_ext_vec_inbatch[_b] = I_ext_vec[:, _T_perB*_b:_T_perB*_b+_T_perB]
+			A_gt_inbatch[_b] = A_gt_raw[:,T_perB*_b:T_perB*_b+_A+T_perB]
+		sampled_spikes_raw_inbatch[_b] = sampled_spikes_raw[:,T_perB*_b:T_perB*_b+_A+T_perB]
+		I_ext_vec_inbatch[_b] = I_ext_vec[:, T_perB*_b:T_perB*_b+T_perB]
 
 	return A_gt_inbatch, sampled_spikes_raw_inbatch, I_ext_vec_inbatch
 

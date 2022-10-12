@@ -6,19 +6,17 @@ import pickle
 
 class LIFmesoCell(tf.keras.layers.Layer):
     def __init__(self, A, dt, 
-                amem, asyn, rp, J, conmat, eps, ft, lambda_t, ref_t, syn_delay,
+                amem, asyn, rp, J, conmat, eps, ft, ref_t, syn_delay,
                 M, N, Nsampled, T, B,
                 Z_hist_est, sampled_hist_gt,
                 initialize='stationary',
-                inference_mode=False,
-                update_popact=True,
-                update_sampledneuron=True,
+                simulation_mode=False,
                 **kwargs):
         '''
         Z_hist_est: (B, self.M, self.A+self.T_num) nparray, float32
         sampled_hist_gt: (B, self.A+self.T_num, self.M, Nsampled) nparray, float32
         N: (self.M)
-        amem, asyn, rp, ft, lambda_t: (self.M, 1), float32
+        amem, asyn, rp, ft: (self.M, 1), float32
         eps, ref_t: float64 # shared across M pops
         J: (self.M) float32 
         conmat: (self.M, self.M) float32 # J@conmat[a, b] from pop a to pop b
@@ -33,9 +31,7 @@ class LIFmesoCell(tf.keras.layers.Layer):
         self.B = B
         self.Nsampled = Nsampled
         self.T = T
-        self.inference_mode = inference_mode
-        self.update_popact = update_popact
-        self.update_sampledneuron = update_sampledneuron
+        self.simulation_mode = simulation_mode
 
         # firing f related
         self._ft = ft
@@ -53,9 +49,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
         self._J = J 
         self.conmat = tf.convert_to_tensor(conmat) # (conmat * diag(J))[a, b] from pop a to pop b
         self._eps = eps # shared across M pops
-
-        # other
-        self._lambda_t = lambda_t
 
         self._Z_hist_est = Z_hist_est # (b,M,A+T) nparray
         self.sampled_hist_gt = sampled_hist_gt # (b,A+T, M, Nsampled) nparray
@@ -178,8 +171,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
         self.internal_clock = 0
         self._init_step = True 
 
-
-
     @tf.function
     def exp(self, x):
         return tf.math.exp(x)
@@ -263,8 +254,7 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
         # Gaussian
         Z_new_est = Z
-        if self.inference_mode:
-            # for inference only
+        if self.simulation_mode:
             Z_new_est =  tf.random.normal((self.B, self.M,1), mean=Z, stddev=tf.sqrt(Z/self.N), dtype=tf.dtypes.float32) 
             Z_new_est = tf.where(Z_new_est<0, 0., Z_new_est)
 
@@ -288,13 +278,15 @@ class LIFmesoCell(tf.keras.layers.Layer):
         return lnPy, lnP1_y, sampled_neuron_v_new
 
     def call(self, inputs, states):
-        x_fixed = inputs[:,:] # same to all pops  (batch_size)
+        x_fixed = inputs[:,:] 
         V_t_old, logS_t_old, sampled_neuron_v, sampled_neuron_lastfire, I_syn = states
 
 
         if self.internal_clock > self.syn_delay_bins:
             Z_t_last = self.Z_hist_est[:,:,self.internal_clock+self.A-self.syn_delay_bins-1:self.internal_clock+self.A-self.syn_delay_bins] # (batch_size, M, 1)
             I_syn = self._exp_term_syn * I_syn + (1-self._exp_term_syn) * Z_t_last/self.dt # (M,1)*(b,M,1) + (M,1)*(b,M,1)
+        else:
+            pass 
 
         input_total = tf.expand_dims(tf.tensordot(tf.squeeze(I_syn, axis=2), 
                                                 self.J,
@@ -304,62 +296,43 @@ class LIFmesoCell(tf.keras.layers.Layer):
         '''
             update of population activity
         '''
-        if self.update_popact:
-            Z_t = self.Z_hist_est[:,:,self.internal_clock:self.internal_clock+self.A][:,:,::-1]
-            Z_t_new = self.Z_hist_est[:,:,self.internal_clock+self.A:self.internal_clock+self.A+1] # (batch_size, M, 1)
-            V_t_new, Plam, lambda_telda = self.get_Plam_t(input_total, V_t_old, self.a_grid)        
+        Z_t = self.Z_hist_est[:,:,self.internal_clock:self.internal_clock+self.A][:,:,::-1]
+        Z_t_new = self.Z_hist_est[:,:,self.internal_clock+self.A:self.internal_clock+self.A+1] # (batch_size, M, 1)
+        V_t_new, Plam, lambda_telda = self.get_Plam_t(input_total, V_t_old, self.a_grid)        
 
-            A_t, Z_t_new_est, Z_t_nll_gaussian, lambda_t, mess = \
-                self.get_A_t_and_Z_t_and_Z_t_likelihood(logS_t_old, Plam, Z_t, Z_t_new)
-            if self.inference_mode:
-                # for inference only
-                Z_t_new = Z_t_new_est
-                temp = self.Z_hist_est.numpy().copy()
-                temp[:,:,self.internal_clock+self.A:self.internal_clock+self.A+1] = Z_t_new_est
-                self.Z_hist_est.assign(temp)
+        A_t, Z_t_new_est, Z_t_nll_gaussian, lambda_t, mess = \
+            self.get_A_t_and_Z_t_and_Z_t_likelihood(logS_t_old, Plam, Z_t, Z_t_new)
+        if self.simulation_mode:
+            Z_t_new = Z_t_new_est
+            temp = self.Z_hist_est.numpy().copy()
+            temp[:,:,self.internal_clock+self.A:self.internal_clock+self.A+1] = Z_t_new_est
+            self.Z_hist_est.assign(temp)
 
-            V_t_new = tf.concat((tf.zeros((self.B, self.M, 1)), V_t_new[:,:,:-1]), axis=2)
-            # (1,M,A)
+        V_t_new = tf.concat((tf.zeros((self.B, self.M, 1)), V_t_new[:,:,:-1]), axis=2)
+        # (1,M,A)
 
-            logS_t_new = tf.concat(
-                        (tf.zeros((self.B,self.M,1)), (logS_t_old-lambda_telda*self.dt)[:,:,:-1]),
-                        axis=2) 
-        else:
-            Z_t_new_est = tf.zeros((self.B, self.M, 1))
-            A_t = Z_t_new_est/self.dt
-            Z_t_nll_gaussian = tf.zeros((self.B, self.M, 1))
-            mess = tf.zeros((self.B, self.M, 1))
-            lambda_t = tf.expand_dims(self._lambda_t, 0)
-
-            V_t_new = V_t_old
-            logS_t_new = logS_t_old
+        logS_t_new = tf.concat(
+                    (tf.zeros((self.B,self.M,1)), (logS_t_old-lambda_telda*self.dt)[:,:,:-1]),
+                    axis=2) 
 
 
         '''
             update of sampled neuron activity
         '''
-        if self.update_sampledneuron:
-            lnPy, lnP1_y, sampled_neuron_v = self.get_y_t_likelihood(sampled_neuron_v, sampled_neuron_lastfire, input_total)
-            if self.inference_mode:
-                # for inference only
-                self.sampled_hist_gt[:,self.internal_clock+self.A,:,:] = \
-                    (np.random.rand(self.B, self.M, self.Nsampled)<tf.math.exp(lnPy)).numpy().astype(np.float32)
+        lnPy, lnP1_y, sampled_neuron_v = self.get_y_t_likelihood(sampled_neuron_v, sampled_neuron_lastfire, input_total)
+        if self.simulation_mode:
+            self.sampled_hist_gt[:,self.internal_clock+self.A,:,:] = \
+                (np.random.rand(self.B, self.M, self.Nsampled)<tf.math.exp(lnPy)).numpy().astype(np.float32)
 
-            Z_t_sn_new = self.sampled_hist_gt[:,self.internal_clock+self.A,:,:]
-            sampled_neuron_lastfire = tf.where(Z_t_sn_new, 0, sampled_neuron_lastfire+self.da)
-            sampled_neuron_v = tf.where(Z_t_sn_new, 0, sampled_neuron_v)
-        else:
-            lnPy = tf.zeros((self.B, self.M, self.Nsampled))
-            lnP1_y = tf.zeros((self.B, self.M, self.Nsampled))
+        Z_t_sn_new = self.sampled_hist_gt[:,self.internal_clock+self.A,:,:]
+        sampled_neuron_lastfire = tf.where(Z_t_sn_new, 0, sampled_neuron_lastfire+self.da)
+        sampled_neuron_v = tf.where(Z_t_sn_new, 0, sampled_neuron_v)
 
-            # sampled_neuron_v do not need to change
-            # sampled_neuron_lastfire do not need to change
 
         output = (A_t,                  # (b, T, M, 1)
                     Z_t_new_est,        # (b, T, M, 1)
                     Z_t_nll_gaussian,   # (b, T, M, 1)
                     lnPy, lnP1_y,       # (b, T, M, N)
-                    mess, lambda_t,     # (b, T, M, 1)
                     )
         
         new_states = (V_t_new, logS_t_new, sampled_neuron_v, sampled_neuron_lastfire, I_syn)
@@ -412,39 +385,6 @@ class LIFmesoCell(tf.keras.layers.Layer):
                             ft)
         return np.exp(-np.sum(fs*dr))
 
-    @staticmethod
-    def compute_stationary_A(h, am, ft, dr=0.00005, ds=0.00005, inf=0.5,
-                            refractory_t=0.):
-
-        bottom_list = [LIFmesoCell.S0(s, h, am, ft, dr=dr,
-                                        refractory_t=refractory_t,) \
-                            for s in np.linspace(ds, inf, int(inf/ds)+1)]
-        bottom = np.sum(bottom_list)*ds
-        A0 = 1/bottom
-        return A0, bottom_list
-
-    @staticmethod
-    def compute_P_acrosstime(A, J, am, rp, ft, t_end=0.2, dt=0.001,
-                            refractory_t=0.):
-        # A, J: (M)
-        # am, rp, ft: float
-        h = rp + np.sum(A*J)/am
-        s_nparray = np.linspace(0.0, t_end, int(t_end/dt)+1)
-        S0 = np.array([LIFmesoCell.S0(s, h, am, ft, refractory_t=refractory_t) for s in s_nparray])
-        fdt = LIFmesoCell.f(LIFmesoCell.V_lastfire_rbefore(h, s_nparray, am, refractory_t=refractory_t), ft)*dt
-        P = S0*fdt
-        return P, s_nparray 
-
-    @staticmethod
-    def compute_fdt_acrosstime(A, J, am, rp, ft, t_end=0.2, dt=0.001,
-                            refractory_t=0.):
-        # A, J: (M)
-        # am, rp, ft: float
-        h = rp + np.sum(A*J)/am
-        s_nparray = np.linspace(0.0, t_end, int(t_end/dt)+1)
-        fdt = LIFmesoCell.f(LIFmesoCell.V_lastfire_rbefore(h, s_nparray, am, refractory_t=refractory_t), ft)*dt
-        return fdt, s_nparray
-
     
     @tf.function
     def neglogP_of_yZ(self, lnPy, lnP1_y, Z_t_nll_gaussian, Nsampled):
@@ -468,22 +408,12 @@ class LIFmesoCell(tf.keras.layers.Layer):
 
 
     @staticmethod
-    def load_model_from_savedfile(savename, *kwargs):
-
-        est_param = pickle.load(open(savename, 'rb') )
-
-        return LIFmesoCell.load_model(est_param['amem'], est_param['J'], est_param['rp'], est_param['ft'], est_param['Z_hist_est'],
-                                     *kwargs, )
-
-    @staticmethod
     def load_model(amem, J, rp,ft, Z_hist_est,
-                    asyn,eps, ref_t, conmat, lambda_t, syn_delay, # new add
+                    asyn,eps, ref_t, conmat, syn_delay, 
                     dt,A,M, N, Nsampled, T, B,
                     sampled_hist_gt, 
                     initialize,
-                    inference_mode,
-                    update_popact,
-                    update_sampledneuron,
+                    simulation_mode,
                     **useless
                    ):
         '''
@@ -497,14 +427,12 @@ class LIFmesoCell(tf.keras.layers.Layer):
         cell = LIFmesoCell(\
                     **LIFmesoCell.out_to_in(amem=amem, J=J, rp=rp, ft=ft, Z_hist_est=Z_hist_est,
                             asyn=asyn, eps=eps, ref_t=ref_t, conmat=conmat,
-                            lambda_t=lambda_t, syn_delay=syn_delay, dt=dt, A=A,
+                            syn_delay=syn_delay, dt=dt, A=A,
                             M=M, N=N, Nsampled=Nsampled, T=T, B=B,
                             sampled_hist_gt=sampled_hist_gt,
                             ), 
                     initialize=initialize,
-                    inference_mode=inference_mode,
-                    update_popact=update_popact,
-                    update_sampledneuron=update_sampledneuron
+                    simulation_mode=simulation_mode,
                     )
 
 

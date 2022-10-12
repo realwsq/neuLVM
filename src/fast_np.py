@@ -34,13 +34,13 @@ def fast_lossy(x, *args):
 			4 T: (1)
 			5 Z(t): (B, M, A+T)
 			6 init_A0: (B, M)
-			6 S(t): (B, M, A+T, N) 	# sampled spike trains
-			7 ref_bins: (1)
-			8 asyn: (M)           # alpha_syn
-			9 eps: (1)
-			10 conmat: (M, M)
-			11 I_ext: (B, M, T)			# external input
-			12 syn_delay: (1)
+			7 S(t): (B, M, A+T, N) 	# sampled spike trains
+			8 ref_bins: (1)
+			9 asyn: (M)           # alpha_syn
+			10 eps: (1)
+			11 conmat: (M, M)
+			12 I_ext: (B, M, T)			# external input
+			13 syn_delay: (1)
 	'''
 	'''
 		parse inputs
@@ -81,7 +81,6 @@ def fast_lossy(x, *args):
 		forward pass
 	'''
 	# Initialization: vmem, age, I_syn, Z
-	
 	age = np.array([da * np.argmax(S[b,:,:A][:,::-1], axis=1) for b in range(B)]) # (B, M, Nsampled), nparray
 	vmem = np.zeros((B, M, Nsampled))	# (B, M, Nsampled), nparray
 	init_A0 = np.array(args[6])[:, :, np.newaxis] # (B, M,1)
@@ -148,8 +147,7 @@ def fast_lossZ(x, *args):
 			9 eps: (1)
 			10 conmat: (M, M)		# not used
 			11 I_ext: (B, M, T)			# external input
-			12 reg_mess or big_lambda: (1)
-			13 syn_delay: (1)
+			12 syn_delay: (1)
 	'''
 
 	'''
@@ -174,14 +172,13 @@ def fast_lossZ(x, *args):
 	eps = args[9] # float/double
 	ref_bins = args[7]
 	ref_t = ref_bins * dt
-	syn_delay = args[13]
+	syn_delay = args[12]
 	syn_delay_bins = int(syn_delay/dt)
 
 	I_ext = np.array(args[11]) # (B,M,T)
 	B = I_ext.shape[0]
 	log2pi = 0.5*np.log(2*3.14)
 
-	reg_mess = args[12]
 
 	'''
 		values to log
@@ -252,7 +249,7 @@ def fast_lossZ(x, *args):
 	'''
 		compute loss: -lnP
 	'''
-	loss = np.mean(Z_nll_gaussian) # + np.mean(np.abs(messes)) * reg_mess
+	loss = np.mean(Z_nll_gaussian) 
 
 	return loss
 
@@ -276,45 +273,23 @@ def fast_lossM(x, *myargs):
 			3 A: (1)					# a_grid_size
 			4 T: (1)
 			5 Z(t): (B, M, A+T)
-			6.1 init_A0: (B, M)
-			6.2 S(t): (B, M, A+T, N) 	# sampled spike trains
-			7 ref_bins: (1)
-			8 asyn: (M)           		# alpha_syn
-			9 eps: (1)
-			10 conmat: (M, M)
-			11 I_ext: (B, M, T)			# external input
-			12 log_mode: (1) 			# 0 (y+Z); 1 (y); 2 (Z)
-			13 reg_mess: (1)
-			14 syn_delay: (1)			# synaptic delay
+			6 init_A0: (B, M)
+			7 S(t): (B, M, A+T, N) 	# sampled spike trains
+			8 ref_bins: (1)
+			9 asyn: (M)           		# alpha_syn
+			10 eps: (1)
+			11 conmat: (M, M)
+			12 I_ext: (B, M, T)			# external input
+			13 syn_delay: (1)			# synaptic delay
 	'''
-	if len(x) == 18:
-		# J_parameterize = 9
-		J = x[3:12]
-		x = [x[0], x[1], x[2],
-			x[3], x[4], x[5],
-			x[6], x[7], x[8],
-			-x[9],-x[10],-x[11],
-			x[12], x[13], x[14], 
-			x[15], x[16], x[17]]
-	elif len(x) == 12:
-		# J_parameterize = 3
-		J = x[3:6]
-		x = [x[0], x[1], x[2],
-			x[3], 0, x[3],
-			0, x[4], x[4],
-			-x[5],-x[5],-x[5],
-			x[6], x[7], x[8], 
-			x[9], x[10], x[11]]  
+	x = [x[0], x[1], x[2],
+		x[3], 0, x[3],
+		0, x[4], x[4],
+		-x[5],-x[5],-x[5],
+		x[6], x[7], x[8], 
+		x[9], x[10], x[11]]  
 
-	if myargs[13] == 1: # log_mode
-		return fast_lossy(x, *(myargs[:13]+myargs[15:16]))
-	elif myargs[13] == 0:
-		loss_y = fast_lossy(x, *(myargs[:13]+myargs[15:16]))
-		loss_Z = fast_lossZ(x, *(myargs[:7]+myargs[8:13]+myargs[14:16]))
-		print(loss_y, loss_Z)
-		return loss_Z + loss_y
-	elif myargs[13] == 2:
-		loss_Z = fast_lossZ(x, *(myargs[:7]+myargs[8:13]+myargs[14:16]))
-		print(loss_Z)
-		return loss_Z
+	loss_y = fast_lossy(x, *(myargs[:14]))
+	loss_Z = fast_lossZ(x, *(myargs[:7]+myargs[8:14]))
+	return loss_Z + loss_y
 

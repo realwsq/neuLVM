@@ -41,7 +41,7 @@ def parse_neuLVM_parameter_fitting_args(parser):
     group.add_option(
         "--end_timepoint",
         type="int",
-        default=44, 
+        default=11, 
         help='t (s); '
     ) 
     group.add_option(
@@ -114,11 +114,11 @@ def parse_neuLVM_parameter_fitting_args(parser):
     group.add_option(
         "--amem",
         default=[50]*3, 
+        help='1/tau_mem'
     ) 
     group.add_option(
         "--J",
-        default=[9.984, 0, 9.984,0,9.984, 9.984,19.968, 19.968, 19.968, ], # ex2ex, ex2inh, inh2ex, inh2inh
-        # default=[9.984, 9.984, 19.968, ], # ex2ex, ex2inh, inh2ex, inh2inh
+        default=[9.984,9.984,19.968]
     ) 
     group.add_option(
         "--rp",
@@ -132,14 +132,16 @@ def parse_neuLVM_parameter_fitting_args(parser):
 
     group = OptionGroup(parser, "initialization")
     group.add_option(
-        "--alpha",
+        "--lb",
         type=float,
         default=0.4,  
+        help='parameters are assumed to follow the uniform prior of [lb, ub]*ground_truth'
     )
     group.add_option(
-        "--beta",
+        "--ub",
         type=float,
         default=2.0,  
+        help='parameters are assumed to follow the uniform prior of [lb, ub]*ground_truth'
     )
     group.add_option(
         "--init_amem",
@@ -152,12 +154,6 @@ def parse_neuLVM_parameter_fitting_args(parser):
         help='place holder, will be randomly sampled'
     ) 
     group.add_option(
-        "--J_parameterize",
-        type=int,
-        default=3,  
-        help='3 or 9',
-    )
-    group.add_option(
         "--init_rp",
         default=[20.]*3,  
         help='place holder, will be randomly sampled'
@@ -167,10 +163,6 @@ def parse_neuLVM_parameter_fitting_args(parser):
         default=[10.]*3,  
         help='place holder, will be randomly sampled'
     )   
-    group.add_option(
-        "--lambda_t",
-        default=[1]*3, 
-    )  
     group.add_option(
         "--sampled_spike_history_smoothed_w",
         type='int',
@@ -186,55 +178,42 @@ def parse_neuLVM_parameter_fitting_args(parser):
         default='train',
     )  
     group.add_option(
-        "--train_Nrinit",
+        "--train_Noinit",
         type='int',
-        default=1,
+        default=0,
     )  
     parser.add_option_group(group)
 
     group = OptionGroup(parser, "training")
     group.add_option(
-        "--E_LR_optimal",
+        "--E_LR",
         type=float,
         default=1e-3, 
     )
     group.add_option(
-        "--E_patience_optimal",
+        "--E_itertol",
         type=int,
         default=3, 
     )
     group.add_option(
-        "--epochE",
+        "--Emaxiters",
         type=int,
         default=200, 
     )
     group.add_option(
-        "--epochM",
+        "--Mmaxiters",
         type=int,
         default=200,  
     )
     group.add_option(
-        "--max_epochs",
+        "--max_EMsteps",
         type=int,
         default=20, 
         help='max number of EM iterations'
     )
     group.add_option(
-        "--log_mode",
-        default=0, 
-        help='0 (py+pZ); 1(py only); 2(pZ only)',
-    )
-    group.add_option(
-        "--inference_mode",
+        "--simulation_mode",
         default=False, 
-    )
-    group.add_option(
-        "--update_popact",
-        default=True, 
-    )
-    group.add_option(
-        "--update_sampledneuron",
-        default=True,
     )
     group.add_option(
         "--method",
@@ -258,7 +237,7 @@ def parse_neuLVM_parameter_fitting_args(parser):
     group.add_option(
         "--LOG_PER",
         type="int",
-        default=1, 
+        default=10, 
     )
     parser.add_option_group(group)
 
@@ -268,26 +247,12 @@ def parse_neuLVM_parameter_fitting_args(parser):
 
 
 opt = parse_args()
+
+SAVE_DIR = f"{opt['SAVE_DIR']}data{opt['end_timepoint']}/{opt['train_folderbase']}{opt['train_Noinit']}"
+
 T_perB = int(opt['t_perbatch']/opt['dt'])
-T_total = int(opt['trial_length']/opt['dt'])
 A = int(opt['a_cutoff']/opt['dt'])
 B = opt['B']
-Btotal = int(opt['trial_length']/opt['t_perbatch'])
-assert B == Btotal
-
-
-
-if opt['J_parameterize'] == 3:
-    opt['J'] = [9.984,9.984,19.968]
-    opt['init_J'] = [15.]*3
-elif opt['J_parameterize'] == 9:
-    opt['J'] = [9.984, 0, 9.984,0,9.984, 9.984,19.968, 19.968, 19.968, ]
-    opt['init_J'] = [15.]*9
-else:
-    assert False
-
-SAVE_DIR = f"{opt['SAVE_DIR']}data{opt['end_timepoint']}/{opt['train_folderbase']}{opt['train_Nrinit']}"
-print(SAVE_DIR)
-
+assert B == int(opt['trial_length']/opt['t_perbatch'])
 
 # used by all scripts
