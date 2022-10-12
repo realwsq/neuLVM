@@ -1,4 +1,4 @@
-
+[![DOI](https://zenodo.org/badge/550245001.svg)](https://zenodo.org/badge/latestdoi/550245001)
 This is python code collection for the publication:
 
 Mesoscopic modeling of hidden spiking neurons 
