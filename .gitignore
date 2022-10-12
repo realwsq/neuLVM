@@ -1,7 +1,3 @@
-estpopact_corr.py
-3pop_BILM2.sh
-3pop_BILM3.sh
-
 result/
 dataset/*
 !dataset/3pop_noinput_small
