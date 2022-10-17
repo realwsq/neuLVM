@@ -129,7 +129,7 @@ def scipy_Mstep(rnn, I_ext_M, **kwargs):
 	def callbackF(X):
 		global Nfeval
 		Nfeval += 1
-		if Nfeval % opt['LOG_PER'] == 0:
+		if (Nfeval % opt['LOG_PER']) == 0:
 			loss = fast_lossM(X, *_args)
 			print(f"M{Nfeval} step of {kwargs['EMstep']} EM iteration: ")
 			print(f"\t current set of parameters ({variablenamed_withorder(opt['M'])}): {X}")
